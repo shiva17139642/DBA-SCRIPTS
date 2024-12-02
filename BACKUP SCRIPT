@@ -1,0 +1,371 @@
+#!/bin/bash
+
+# Perform RMAN backup
+# Expected usage: f_perform_backup DB LEVEL
+#  DB: Database SID to pass to RMAN
+#  LEVEL: full/inc - full is full incremental, inc is differential incremental
+f_perform_backup() {
+  export LEVEL="$1"
+  echo "Performing backup on $ORACLE_SID."
+  echo "Performing $LEVEL backup."
+  export DATE = $(date +% y -% m -% d_ % H % M % S)
+
+  # Run RMAN
+  $ORACLE_HOME/bin/rman <<RMAN
+    connect target /
+    run {
+      delete noprompt obsolete;
+      allocate channel d1 device type disk format '/db01/backup/%U';
+      backup
+      incremental level = $LEVEL
+      database include current controlfile;
+      backup archivelog all delete input;
+    }
+    exit;
+RMAN
+  echo "backup completed on $ORACLE_SID, at: $(date)"
+}
+
+# Main
+# Expected usage: ./backup_db DBNAME BACKUP_TYPE
+#  DBNAME: SID of Oracle database
+#  BACKUP_TYPE: Incremental backup, or full backup
+f_main() {
+  echo "ORACLE_HOME set to: $ORACLE_HOME"
+  if [ -z "$ORACLE_HOME" ]; then
+    echo "\$ORACLE_HOME isn't set. Exiting."
+    exit 133
+  fi
+  # which database?
+  if [ -z "$1" ]; then
+    echo "\$ORACLE_SID not provided. Exiting."
+    exit 133
+  else
+    export ORACLE_SID=$1
+  fi
+  # incremental or full?
+  if [ -z "$2" ]; then
+    echo "No backup method specified. Exiting."
+    exit 133
+  else
+    if [ "$2" == "inc" ]; then
+      f_perform_backup "1"
+    elif [ "$2" == "full" ]; then
+      f_perform_backup "0"
+    else
+      echo "Invalid backup method specified. Exiting."
+    fi
+  fi
+}
+
+# Source environment
+source $HOME/.bash_profile
+
+# Colors
+RESTORE='\033[0m'
+PURPLE='\033[00;35m'
+
+# Call main, pass parameters
+echo "Running script on: $(date)."
+f_main "$1" "$2"
+
+
+-------------------------------------------------------------------------------
+	  crosscheck archivelog all;
+      crosscheck backup;
+      delete noprompt obsolete;
+      delete noprompt expired backup;
+
+
+--------------------------------------------------------
+
+Step 1. Prepare a RMAN command file
+
+Create shell script to take rman backup
+
+[oracle@Prod22 backup]$ cat rman_bkp.sh
+export ORACLE_SID=IMBDBSTBY1
+export ORACLE_BASE=/u02/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/19.3.0/dbhome_1
+export DATE=$(date +%y-%m-%d_%H%M%S)
+export PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+
+
+rman target / nocatalog log=/u02/backup/RMAN_backup.log << EOF
+
+run
+{
+allocate channel ch1 device type disk;
+configure retention policy to recovery window of 2 days;
+CONFIGURE DEVICE TYPE DISK BACKUP TYPE TO COMPRESSED BACKUPSET PARALLELISM 2;
+CROSSCHECK BACKUP DEVICE TYPE DISK;
+CROSSCHECK ARCHIVELOG ALL;
+delete noprompt archivelog all backed up 1 times to device type disk;
+backup incremental level 0 as compressed backupset database archivelog all format '/backup/<databasename>/data_%d_%I_%t_%s.bak' delete input;
+backup current controlfile format '/backup/<databasename>/control_%F.bak';
+DELETE NOPROMPT backup completed before 'sysdate-2';
+release channel ch1;
+}
+EOF
+
+Step 2. Change the permission 
+
+Change the permission of the shell script.
+
+chmod 744 rman_bkp.sh
+
+Step:-3 Schedule rman backup on crontab
+
+Schedule backup will run at 10:00 PM every day.Add the below entry in crontab.
+
+[oracle@Prod22 backup]$ crontab -l
+###Rman Backup####
+
+22 00 * * * /u02/backup/rman_bkp.sh
+
+
+run
+{
+allocate channel ch1 device type disk;
+sql 'ALTER SYSTEM ARCHIVE LOG CURRENT';
+sql 'ALTER SYSTEM CHECKPOINT';
+CROSSCHECK ARCHIVELOG ALL;
+delete noprompt archivelog all backed up 1 times to device type disk;
+backup incremental level 0 as compressed backupset database archivelog all format '/backup/<databasename>/data_%d_%I_%t_%s.bak' delete input;
+backup current controlfile format '/backup/<databasename>/control_%F.bak';
+DELETE NOPROMPT backup completed before 'sysdate-1';
+release channel ch1;
+}
+
+
+
+
+export ORACLE_SID=IMBDBSTBY1
+export ORACLE_BASE=/u02/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/19.3.0/dbhome_1
+export DATE=$(date +%y-%m-%d_%H%M%S)
+export PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+
+# Run RMAN
+  $ORACLE_HOME/bin/rman <<RMAN
+
+connect target / nocatalog log=/u02/backup/RMAN_backup.log << EOF
+
+run
+{
+crosscheck archivelog all;
+crosscheck backup;
+allocate channel d1 device type disk format '+BACKUP/IMBDBSTBY/%U';
+backup incremental level 0 as compressed backupset database archivelog all tag Full_backup delete input;
+database include current controlfile;
+delete noprompt archivelog all completed before 'sysdate -2';
+}
+EOF
+
+shell script name is rman_full_backup.sh
+
+vi /u01/rman_backup/rman_full_backup.sh
+
+Backup Script:
+
+export Backup_Location='+BACKUP/IMBDBSTBY/%U'
+export ORACLE_SID=IMBDBSTBY1
+export ORACLE_BASE=/u02/app/oracle
+export ORACLE_HOME=/u02/app/oracle/product/19.3.0/dbhome_1
+export DATE=$(date +%y-%m-%d_%H%M%S)
+export PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+
+rman target / nocatalog log=$Backup_Location/LogRMAN.log << EOF
+run
+{
+allocate channel d1 device type disk format '+BACKUP/IMBDBSTBY/%U';
+crosscheck backup;
+crosscheck archivelog all;
+delete noprompt expired backup;
+delete noprompt obsolete;
+allocate channel d1 device type disk format '+BACKUP/IMBDBSTBY/%U';
+backup incremental level 0 as compressed backupset database archivelog all tag Full_backup delete input;
+database include current controlfile;
+delete noprompt archivelog all completed before 'sysdate -2';
+}
+EOF
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@ (OR) @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+# $Header: rman_full_bkp.sh
+# #################################################
+# Script to be used on the crontab to schedule an RMAN Full Backup
+# ################################################
+
+# ###############################################
+# VARIABLES To be Modified by the user to match the Environment:
+# ###############################################
+
+# INSTANCE Name: [Replace ${ORACLE_SID} with your instance SID]
+ORACLE_SID=BAWDB1
+
+# ORACLE_HOME Location: [Replace ${ORACLE_HOME} with the right ORACLE_HOME path]
+ORACLE_HOME=u02/app/oracle/product/19.3.0/dbhome_1
+export PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+
+
+# Backup Location: [Replace /backup/rmanfull with the backup location path]
+BACKUPLOC=+BACKUP/bawdb
+
+# Backup LOG location:
+RMANLOG=/dbbkp/backup/RMAN_bawdb.log
+
+# COMPRESSED BACKUP option:[Y|N] [Default ENABLED]
+COMPRESSION=Y
+
+# Perform Maintenance based on below Backup & Archivelog Retention: [Y|N] [Default DISABLED]y
+MAINTENANCEFLAG=N
+
+# Backup Retention "In Days": [Backups older than this retention will be deleted]
+BKP_RETENTION=2
+
+# Archives Deletion "In Days": [Archivelogs older than this retention will be deleted]
+ARCH_RETENTION=2
+
+
+
+# ##################
+# GENERIC VARIABLES: [Can be left without modification]
+# ##################
+
+# MAX BACKUP Piece Size: [Must be BIGGER than the size of the biggest datafile in the database]
+MAX_BKP_PIECE_SIZE=33g
+
+# Show the full DATE and TIME details in the backup log:
+NLS_DATE_FORMAT='DD-Mon-YYYY HH24:MI:SS'
+
+export ORACLE_SID
+export ORACLE_HOME
+export BACKUPLOC
+export COMPRESSION
+export BKP_RETENTION
+export ARCH_RETENTION
+export MAX_BKP_PIECE_SIZE
+export RMANLOG
+export NLS_DATE_FORMAT
+export MAINTENANCEFLAG
+
+# Check the selected COMPRESSION option:
+case ${COMPRESSION} in
+Y|y|YES|Yes|yes|ON|on)
+COMPRESSED_BKP="AS COMPRESSED BACKUPSET"
+export COMPRESSED_BKP
+;;
+*)
+COMPRESSED_BKP=""
+export COMPRESSED_BKP
+;;
+esac
+
+# Check the selected MAINTENANCE option:
+case ${MAINTENANCEFLAG} in
+Y|y|YES|Yes|yes|ON|on)
+HASH_MAINT=""
+export HASH_MAINT
+;;
+*)
+HASH_MAINT="#"
+export COMPRESSED_BKP
+;;
+esac
+
+
+# Append the date to the backup log for each script execution:
+echo "----------------------------" >> ${RMANLOG}
+date >> ${RMANLOG}
+echo "----------------------------" >> ${RMANLOG}
+
+# ###################
+# RMAN SCRIPT Section:
+# ###################
+
+${ORACLE_HOME}/bin/rman target / msglog=${RMANLOG} <<EOF
+# Configuration Section:
+# ---------------------
+${HASH_MAINT}CONFIGURE BACKUP OPTIMIZATION ON;
+${HASH_MAINT}CONFIGURE CONTROLFILE AUTOBACKUP ON;
+${HASH_MAINT}CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '${BACKUPLOC}/%F';
+${HASH_MAINT}CONFIGURE SNAPSHOT CONTROLFILE NAME TO '${ORACLE_HOME}/dbs/snapcf_${ORACLE_SID}.f';
+## Avoid Deleting archivelogs NOT yet applied on the standby: [When FORCE is not used]
+#CONFIGURE ARCHIVELOG DELETION POLICY TO APPLIED ON ALL STANDBY;
+
+# Maintenance Section:
+# -------------------
+## Crosscheck backups/copied to check for expired backups which are physically not available on the media:
+${HASH_MAINT}crosscheck backup completed before 'sysdate-${BKP_RETENTION}' device type disk;
+${HASH_MAINT}crosscheck copy completed before 'sysdate-${BKP_RETENTION}' device type disk;
+## Report & Delete Obsolete backups which don't meet the RETENTION POLICY:
+${HASH_MAINT}REPORT OBSOLETE RECOVERY WINDOW OF ${BKP_RETENTION} DAYS device type disk;
+${HASH_MAINT}DELETE NOPROMPT OBSOLETE RECOVERY WINDOW OF ${BKP_RETENTION} DAYS device type disk;
+## Delete All EXPIRED backups/copies which are not physically available:
+${HASH_MAINT}DELETE NOPROMPT EXPIRED BACKUP COMPLETED BEFORE 'sysdate-${BKP_RETENTION}' device type disk;
+${HASH_MAINT}DELETE NOPROMPT EXPIRED COPY COMPLETED BEFORE 'sysdate-${BKP_RETENTION}' device type disk;
+## Crosscheck Archivelogs to avoid the backup failure:
+${HASH_MAINT}CHANGE ARCHIVELOG ALL CROSSCHECK;
+${HASH_MAINT}DELETE NOPROMPT EXPIRED ARCHIVELOG ALL;
+## Delete Archivelogs older than ARCH_RETENTION days:
+${HASH_MAINT}DELETE NOPROMPT archivelog all completed before 'sysdate -${ARCH_RETENTION}';
+
+# Full Backup Script starts here: [Compressed+Controlfile+Archives]
+# ------------------------------
+run{
+allocate  CHANNEL DEVICE TYPE DISK FORMAT   '+BACKUP/bawdb/%U';
+sql 'alter system archive log current';
+BACKUP ${COMPRESSED_BKP}
+#MAXSETSIZE ${MAX_BKP_PIECE_SIZE}
+NOT BACKED UP SINCE TIME 'SYSDATE-2/24'
+INCREMENTAL LEVEL=0
+FORMAT '${BACKUPLOC}/%d_%t_%s_%p.bkp' 
+FILESPERSET 100
+TAG='FULLBKP'
+DATABASE include current controlfile PLUS ARCHIVELOG NOT BACKED UP SINCE TIME 'SYSDATE-2/24';
+## Backup the controlfile separately:
+BACKUP ${COMPRESSED_BKP} CURRENT CONTROLFILE FORMAT '${BACKUPLOC}/CTL_%d_%t_%s_%p.bkp' TAG='CONTROLFILE_BKP' REUSE ;
+## Trace backup of Controlfile & SPFILE:
+SQL "ALTER DATABASE BACKUP CONTROLFILE TO TRACE AS ''${BACKUPLOC}/controlfile.trc'' REUSE";
+SQL "CREATE PFILE=''${BACKUPLOC}/init${ORACLE_SID}.ora'' FROM SPFILE";
+}
+EOF
+
+
+
+export ORACLE_SID=BAWDB1
+export ORACLE_BASE=/u02/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/19.3.0/dbhome_1
+export PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+export DATE=$(date +%y-%m-%d_%H%M%S)
+
+
+rman target /  log=/dbbkp/backup/RMAN_baw_${DATE}.log << EOF
+
+run
+{
+allocate  CHANNEL DEVICE TYPE DISK FORMAT   '+BACKUP/bawdb/%U';
+sql ‘ALTER SYSTEM ARCHIVE LOG CURRENT’;
+configure retention policy to recovery window of 3 days;
+CONFIGURE DEVICE TYPE DISK BACKUP TYPE TO COMPRESSED BACKUPSET PARALLELISM 2;
+CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '+BACKUP/bawdb/%F';
+CONFIGURE SNAPSHOT CONTROLFILE NAME TO '+BACKUP/dg_backup/snapcf_AMSPRD1.f';
+CROSSCHECK BACKUP DEVICE TYPE DISK;
+CROSSCHECK ARCHIVELOG ALL;
+delete noprompt archivelog all backed up 1 times to device type disk;
+backup incremental level 0 as compressed backupset database archivelog all tag Full_backup delete input;
+DELETE NOPROMPT OBSOLETE;
+DELETE NOPROMPT EXPIRED BACKUP;
+release  CHANNEL DEVICE TYPE DISK FORMAT   '+BACKUP/bawdb/%U';
+}
+EOF
+
+
+
+
