@@ -1,0 +1,67 @@
+TESTDB RESTORE RAC TO STANDALONE:-
+------------------------------------
+
+IMBTEST.__data_transfer_cache_size=0
+IMBTEST.__db_cache_size=10536091648
+IMBTEST.__inmemory_ext_roarea=0
+IMBTEST.__inmemory_ext_rwarea=0
+IMBTEST.__java_pool_size=134217728
+IMBTEST.__large_pool_size=67108864
+IMBTEST.__oracle_base='/u01/app/oracle'#ORACLE_BASE set from environment
+IMBTEST.__pga_aggregate_target=4227858432
+IMBTEST.__sga_target=12616466432
+IMBTEST.__shared_io_pool_size=134217728
+IMBTEST.__shared_pool_size=1711276032
+IMBTEST.__streams_pool_size=0
+IMBTEST.__unified_pga_pool_size=0
+*.audit_file_dest='/u01/app/oracle/admin/IMBTEST/adump'
+*.audit_trail='db'
+*.compatible='19.0.0'
+*.control_files='/u03/IMBTEST/controlfiles/controlfile_01.ctl','/u03/IMBTEST/controlfiles/controlfile_02.ctl'
+*.db_block_size=8192
+*.db_create_file_dest='/u01/app/oracle/oradata'
+*.db_name='IMBDB'
+*.db_recovery_file_dest_size=8256m
+*.diagnostic_dest='/u01/app/oracle'
+*.dispatchers='(PROTOCOL=TCP) (SERVICE=IMBTESTXDB)'
+*.open_cursors=300
+*.pga_aggregate_target=4006m
+*.processes=640
+*.remote_login_passwordfile='EXCLUSIVE'
+*.sga_target=12016m
+*.undo_tablespace='UNDOTBS1'
+*.diagnostic_dest='/oracle/app/oracle'
+*.log_file_name_convert='+REDO/IMBTESTDB/onlinelogs/','/u03/IMBTEST/onlinelogs/'
+*.log_archive_dest_1='LOCATION=/u03/IMBTEST/archivelogs'
+*.log_archive_format='%t_%s_%r.arc'
+
+
+
+
+run {
+SET NEWNAME FOR DATABASE   TO  '/u03/datafiles/%b';
+SET NEWNAME FOR tempfile  1 TO  '/u03/datafiles/%b'; 
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_1.291.1111760697' to '/u03/onlinelogs/group_1.291.1111760697';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_10.296.1111760827' to '/u03/onlinelogs/group_10.296.1111760827';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_11.297.1111760847' to '/u03/onlinelogs/group_11.297.1111760847';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_12.298.1111760867' to '/u03/onlinelogs/group_12.298.1111760867';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_13.299.1111760889' to '/u03/onlinelogs/group_13.299.1111760889';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_14.300.1111760905' to '/u03/onlinelogs/group_14.300.1111760905';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_15.301.1111760923' to '/u03/onlinelogs/group_15.301.1111760923';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_16.302.1111760939' to '/u03/onlinelogs/group_16.302.1111760939';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_17.303.1111760959' to '/u03/onlinelogs/group_17.303.1111760959';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_18.304.1111761025' to '/u03/onlinelogs/group_18.304.1111761025';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_2.292.1111760707' to '/u03/onlinelogs/group_2.292.1111760707';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_3.293.1111760731' to '/u03/onlinelogs/group_3.293.1111760731';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_4.294.1111760753' to '/u03/onlinelogs/group_4.294.1111760753';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_5.287.1111759627' to '/u03/onlinelogs/group_5.287.1111759627';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_6.288.1111759649' to '/u03/onlinelogs/group_6.288.1111759649';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_7.289.1111760393' to '/u03/onlinelogs/group_7.289.1111760393';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_8.290.1111760409' to '/u03/onlinelogs/group_8.290.1111760409';
+ALTER DATABASE RENAME FILE '+REDO/IMBTESTDB/ONLINELOG/group_9.295.1111760807' to '/u03/onlinelogs/group_9.295.1111760807';
+set until sequence 6399;
+restore database;
+switch datafile all;
+switch tempfile all;
+recover database;
+}
