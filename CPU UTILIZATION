@@ -1,0 +1,141 @@
+************ CPU UTILIZATION *************:-
+----------------------------------------------------------------------------------------------------------
+top
+
+To get the total number of sessions connected :-
+------------------------------------------------
+SELECT COUNT(*) AS TOTAL_SESSIONS
+FROM GV$SESSION;
+ 
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------
+Inactive sessions check:-
+-------------------------
+SELECT inst_id,
+       status,
+       COUNT(*) AS session_count
+FROM gv$session
+GROUP BY inst_id, status
+ORDER BY inst_id, status;
+ 
+ 
+set lines 200 pages 200;
+select status,count(*),inst_id,sid,SERIAL#  from gv$session where status='INACTIVE' group by inst_id,status,sid,SERIAL# order by 1 ;
+
+select sid,SERIAL#,INST_ID,status  from gv$session where username is not null and SECONDS_IN_WAIT>60*60*2;
+ 
+SELECT 'ALTER SYSTEM KILL SESSION '''||sid||','||serial#|| ',@'||inst_id||''' IMMEDIATE;' FROM gv$session where username is not null and seconds_in_wait>60*60*2 and status='INACTIVE';
+
+select MACHINE,count(*) from gv$session where username is not null and SECONDS_IN_WAIT>60*60*2 group by MACHINE;
+
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------
+Top CPU Consuming Session in last 10 min:-
+------------------------------------------
+
+select * from
+(
+select session_id, session_serial#, count(*)
+from v$active_session_history
+where session_state= 'ON CPU' and
+sample_time >= sysdate - interval '10' minute
+group by session_id, session_serial#
+order by count(*) desc
+);
+
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------
+
+SQL id consuming more CPU in Oracle:-
+-------------------------------------
+
+col program form a20 heading "Program"
+col cpu_usage_sec form 99990 heading "CPU in Seconds"
+col MODULE for a15
+col machine for a22
+col OSUSER for a10
+col USERNAME for a15
+col Program for a22
+col MACHINE for a22
+col OSPID for a06 heading "OS PID"
+col SID for 99999
+col SERIAL# for 999999
+col SQL_ID for a15
+select * from (
+select p.spid "ospid",
+(se.SID),ss.serial#,ss.SQL_ID,ss.username,substr(ss.program,1,30) "program",
+ss.module,ss.osuser,ss.MACHINE,ss.status,
+se.VALUE/100 cpu_usage_sec
+from v$session ss,v$sesstat se,
+v$statname sn,v$process p
+where
+se.STATISTIC# = sn.STATISTIC#
+and NAME like '%CPU used by this session%'
+and se.SID = ss.SID
+and ss.username !='SYS'
+and ss.status='ACTIVE'
+and ss.username is not null
+and ss.paddr=p.addr and value > 0
+order by se.VALUE desc);
+
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------
+
+SQL Text top consuming CPU in Oracle :-
+-------------------------------------
+
+col cpu_usage_sec form 99990 heading "CPU in Seconds"
+select * from (
+select
+(se.SID),substr(q.sql_text,80),ss.module,ss.status,se.VALUE/100 cpu_usage_sec
+from v$session ss,v$sesstat se,
+v$statname sn, v$process p, v$sql q
+where
+se.STATISTIC# = sn.STATISTIC#
+AND ss.sql_address = q.address
+AND ss.sql_hash_value = q.hash_value
+and NAME like '%CPU used by this session%'
+and se.SID = ss.SID
+and ss.username !='SYS'
+and ss.status='ACTIVE'
+and ss.username is not null
+and ss.paddr=p.addr and value > 0
+order by se.VALUE desc);
+
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------
+TO KNOW SID FROM PROCESS ID:-
+-----------------------------------
+
+SELECT s.sid, s.serial#, s.username, s.status FROM v$session s JOIN v$process p ON (s.paddr = p.addr) WHERE p.spid = 70917;
+
+
+TO KNOW SQL_ID FROM SID:-
+-----------------------------------
+SELECT sql_id
+FROM v$session
+WHERE sid = 551;
+
+
+TO KNOW USERNAME FROM SQL_ID:-
+----------------------------
+
+set lines 200 pages 200;
+col SQL_ID for 99999;
+col OSUSER for a40;
+col MACHINE for a40;
+col SCHEMANAME for a40;
+col USERNAME for a40;
+select SQL_ID,OSUSER,MACHINE,SCHEMANAME,USERNAME from v$session where SQL_ID='4hy3z5vxphx5w';
+
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------
+To more detailed information about each user:-
+-----------------------------------------------
+SELECT USERNAME, COUNT(*) AS SESSIONS_PER_USER
+FROM GV$SESSION
+WHERE USERNAME IS NOT NULL
+GROUP BY USERNAME
+ORDER BY SESSIONS_PER_USER DESC;
+
+
